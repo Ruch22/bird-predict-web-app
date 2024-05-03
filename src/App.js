@@ -1,6 +1,8 @@
 import logo from './logo.svg';
 import './App.css';
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
+import { ToastContainer, toast } from 'react-toastify'; // Import ToastContainer and toast
+import 'react-toastify/dist/ReactToastify.css'; // Import CSS for toast notifications
 import { useDropzone } from 'react-dropzone';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Carousel } from 'react-bootstrap';
@@ -66,10 +68,16 @@ const NavBar = () => {
 
 const BodySection = () => {
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  
+  const [predictionResult, setPredictionResult] = useState(null);
+  const [showPredictionSection, setShowPredictionSection] = useState(false);
+
+  const [predictionDescription, setPredictionDescription] = useState(null);
 
   const onDrop = (acceptedFiles) => {
     const imageFiles = acceptedFiles.filter(file => file.type.startsWith('image/'));
-    setUploadedFiles(imageFiles);
+    setUploadedFiles(imageFiles);    
+    setShowPredictionSection(false);
   };
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -77,14 +85,75 @@ const BodySection = () => {
     accept: 'image/*',
     multiple: false,
   });
-  
-  const [predictionResult, setPredictionResult] = useState(null);
-  const [showPredictionSection, setShowPredictionSection] = useState(false);
 
-  const handlePredictButtonClick = () => {
-    const result = '';
-    setPredictionResult(result);
-    setShowPredictionSection(true);
+  const handlePrediction = async () => {
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadedFiles[0]);
+      const response = await fetch('http://127.0.0.1:8000/predict/', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      setPredictionResult(data.predicted_bird);
+      getBirdDescription(data.predicted_bird);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+
+  const saveFeedback = async (type) => {
+    try {
+      const formData = new FormData();
+      let result = type.toUpperCase();
+
+      formData.append('image', uploadedFiles[0]);
+      formData.append('predictedSpecies', predictionResult);
+      formData.append('result', result);
+
+      const response = await fetch('http://localhost:1111/api/v1/save', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.status == 200) {
+        toast.success("Feedback saved successfully. Thank you so much for giving the feedback!");
+      }
+      else{
+        toast.error("Error occured when saving the feedback. However,Thank you so much for using the application!");
+      }
+
+    } catch (error) {
+      toast.error("Could not make the request. However,Thank you so much for using the application!");
+    }
+  };
+
+  const getBirdDescription = async (bird) => {
+    let data;
+    try {
+      setPredictionDescription("Please wait while generating...");
+      setShowPredictionSection(true);
+      
+      const response = await fetch('http://localhost:1111/api/v1/description/' + bird, {
+        method: 'GET'
+      });
+      
+      data = "Please wait while generating...";
+
+      if (!response.status == 200) {
+        data = "Couldn't get the description of the predicted bird species."
+      }
+      else{
+        data = await response.text();
+      }
+
+      setPredictionDescription(data);
+      setShowPredictionSection(true);
+
+    } catch (error) {
+      data = "Couldn't get the description of the predicted bird species."
+      setPredictionDescription(data);
+    }
   };
   
 
@@ -137,7 +206,7 @@ const BodySection = () => {
 
       {uploadedFiles.length > 0 && (
         <div className='row'>
-          <div className='col-md-6' style={{padding: '20px', paddingTop:'5px'}}>
+          <div className='col-md-3' style={{padding: '20px', paddingTop:'5px'}}>
             <div>
               <h4>Uploaded Image</h4>
               <ul style={{ listStyleType: 'none', padding: 0}}>
@@ -154,40 +223,38 @@ const BodySection = () => {
               <button
                 className='btn btn-dark'
                 style={{borderRadius: '30px', paddingTop: '12px',  paddingBottom: '12px', marginTop: '5px', width: '100%'}}
-                onClick={handlePredictButtonClick}>Predict
+                onClick={handlePrediction}>Predict
               </button>
             </div>
           </div>
 
           {showPredictionSection && (
-            <div className='col-md-6' style={{padding: '20px', paddingTop:'5px'}}>
+            <div className='col-md-9' style={{padding: '20px', paddingTop:'5px'}}>
               <div>
-                <h4>Predicted Bird Species</h4>
+              <h4>Predicted Bird Species</h4>
                 <div style={{ width: '100%', maxHeight: '100%', padding:'20px', marginTop: '12px', border: '1px solid #cccccc', borderRadius: '15px' }}>
                   <h6 className='text-primary'>Bird Name</h6>
-                  <h3>bird name</h3>
+                  <h3>{predictionResult}</h3>
                   <div style={{ borderBottom: '1px dashed #000', margin: '20px 0' }}></div>
                   <h6 className='text-primary'>For your knowledge</h6>
                   <h5 style={{ textAlign: 'justify'}}>
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et
-                    dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip
-                    ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore
-                    eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia
-                    deserunt mollit anim id est laborum.
+                    {predictionDescription}
                   </h5>
-                  <div style={{ borderBottom: '1px dashed #000', margin: '20px 0' }}></div>
+                  <div style={{ borderBottom: '1px dashed #000', margin: '20px 0' }}></div> 
                   <div className='row' style={{paddingTop:'5px'}}>
                     <div className='col-md-6'>
                       <button
                         className='btn btn-danger'
-                        style={{borderRadius: '30px', paddingTop: '12px',  paddingBottom: '12px', marginTop: '10px', width: '100%'}}>
+                        style={{borderRadius: '30px', paddingTop: '12px',  paddingBottom: '12px', marginTop: '10px', width: '100%'}}
+                        onClick={() => saveFeedback('wrong')}>
                           Wrong
                       </button>
                     </div>
                     <div className='col-md-6'>
                       <button
                         className='btn btn-success'
-                        style={{borderRadius: '30px', paddingTop: '12px',  paddingBottom: '12px', marginTop: '10px', width: '100%'}}>
+                        style={{borderRadius: '30px', paddingTop: '12px',  paddingBottom: '12px', marginTop: '10px', width: '100%'}}
+                        onClick={() => saveFeedback('correct')}>
                           Correct
                       </button>
                     </div>
@@ -211,6 +278,7 @@ function App() {
       <div style={uploadWindow}>
         <BodySection />
       </div>
+      <ToastContainer />
     </div>
   );
 }
