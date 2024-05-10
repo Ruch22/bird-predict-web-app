@@ -73,6 +73,7 @@ const BodySection = () => {
   const [showPredictionSection, setShowPredictionSection] = useState(false);
 
   const [predictionDescription, setPredictionDescription] = useState(null);
+  const [predictionConfidence, setPredictionConfidence] = useState(null);
 
   const onDrop = (acceptedFiles) => {
     const imageFiles = acceptedFiles.filter(file => file.type.startsWith('image/'));
@@ -88,15 +89,28 @@ const BodySection = () => {
 
   const handlePrediction = async () => {
     try {
+      setPredictionConfidence("")
+      setPredictionResult("Please wait while predicting...");
+      setPredictionDescription("Please wait while generating...");
+      setShowPredictionSection(true);
       const formData = new FormData();
       formData.append('file', uploadedFiles[0]);
-      const response = await fetch('http://127.0.0.1:8000/predict/', {
+      const response = await fetch('http://13.53.254.90:8000/predict/', {
         method: 'POST',
         body: formData
       });
       const data = await response.json();
-      setPredictionResult(data.predicted_bird);
-      getBirdDescription(data.predicted_bird);
+      const result = data.predicted_bird;
+      const confidence = data.confidence;
+      setPredictionConfidence("(Confidence Rate:" + confidence + ")")
+      if (result != "Unreliable prediction" && result !=""){
+        setPredictionResult(result);
+        getBirdDescription(result);
+      }
+      else{
+        setPredictionResult("Sorry, Unidentified!");
+        getBirdDescription("error" + confidence);
+      }
     } catch (error) {
       console.error('Error:', error);
     }
@@ -111,7 +125,7 @@ const BodySection = () => {
       formData.append('predictedSpecies', predictionResult);
       formData.append('result', result);
 
-      const response = await fetch('http://localhost:1111/api/v1/save', {
+      const response = await fetch('http://13.53.254.90:8080/api/v1/save', {
         method: 'POST',
         body: formData
       });
@@ -131,25 +145,31 @@ const BodySection = () => {
   const getBirdDescription = async (bird) => {
     let data;
     try {
-      setPredictionDescription("Please wait while generating...");
-      setShowPredictionSection(true);
-      
-      const response = await fetch('http://localhost:1111/api/v1/description/' + bird, {
-        method: 'GET'
-      });
-      
-      data = "Please wait while generating...";
-
-      if (!response.status == 200) {
-        data = "Couldn't get the description of the predicted bird species."
+      if (bird.includes("error")){
+        const msg = "Cannot identify a bird in the selected image. Or the selected bird is not trained yet. (Confidence rate:" + bird.replace("error", "") + ")"
+        setPredictionDescription(msg);
+        setShowPredictionSection(true);
       }
       else{
-        data = await response.text();
+        setPredictionDescription("Please wait while generating...");
+        setShowPredictionSection(true);
+        
+        const response = await fetch('http://13.53.254.90:8080/api/v1/description/' + bird, {
+          method: 'GET'
+        });
+        
+        data = "Please wait while generating...";
+
+        if (!response.status == 200) {
+          data = "Couldn't get the description of the predicted bird species."
+        }
+        else{
+          data = await response.text();
+        }
+
+        setPredictionDescription(data);
+        setShowPredictionSection(true);
       }
-
-      setPredictionDescription(data);
-      setShowPredictionSection(true);
-
     } catch (error) {
       data = "Couldn't get the description of the predicted bird species."
       setPredictionDescription(data);
@@ -234,7 +254,7 @@ const BodySection = () => {
               <h4>Predicted Bird Species</h4>
                 <div style={{ width: '100%', maxHeight: '100%', padding:'20px', marginTop: '12px', border: '1px solid #cccccc', borderRadius: '15px' }}>
                   <h6 className='text-primary'>Bird Name</h6>
-                  <h3>{predictionResult}</h3>
+                  <h3>{predictionResult} {predictionConfidence}</h3>
                   <div style={{ borderBottom: '1px dashed #000', margin: '20px 0' }}></div>
                   <h6 className='text-primary'>For your knowledge</h6>
                   <h5 style={{ textAlign: 'justify'}}>
